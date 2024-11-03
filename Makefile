@@ -50,5 +50,5 @@ define Package/luci-theme-$(THEME_NAME)/postinst
 	( . /etc/uci-defaults/30-luci-theme-$(THEME_NAME) ) && rm -f /etc/uci-defaults/30-luci-theme-$(THEME_NAME)
 }
 endef
-
+$(eval $(call PackageDir,luci-theme-$(THEME_NAME),luci-theme-$(THEME_NAME),))
 $(eval $(call BuildPackage,luci-theme-$(THEME_NAME)))
