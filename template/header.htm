@@ -16,10 +16,23 @@
 					Licensed to the public under the Apache License 2.0
 					-%>
 
-					<% local sys=require "luci.sys" local util=require "luci.util" local http=require "luci.http" local
-						disp=require "luci.dispatcher" local ver=require "luci.version" local
-						boardinfo=util.ubus("system", "board" ) or { } local node=disp.context.dispatched local
-						path=table.concat(disp.context.path, "-" ) http.prepare_content("text/html; charset=UTF-8") -%>
+					<%
+						local sys = require "luci.sys"
+						local util = require "luci.util"
+						local http = require "luci.http"
+						local disp = require "luci.dispatcher"
+						local ver = require "luci.version"
+						local config = require "luci.config"
+						local boardinfo = util.ubus("system", "board") or {}
+						local node = disp.context.dispatched
+						local dispatchpath = disp.context.path or {}
+						local requestpath = disp.context.requestpath or dispatchpath
+						local path = table.concat(dispatchpath, "-")
+						local apply = config.apply or {}
+						local main = config.main or {}
+
+						http.prepare_content("text/html; charset=UTF-8")
+					-%>
 						<!DOCTYPE html>
 						<html lang="<%=luci.i18n.context.lang%>">
 
@@ -42,9 +55,31 @@
 							<% if node and node.css then %>
 								<link rel="stylesheet" href="<%=resource%>/<%=node.css%>">
 								<% end -%>
-									<script
-										src="<%=url('admin/translations', luci.i18n.context.lang)%>?v=git-21.295.66888-fc702bc"></script>
-									<script src="<%=resource%>/cbi.js?v=git-21.295.66888-fc702bc"></script>
+									<script src="<%=resource%>/promis.min.js"></script>
+									<script src="<%=resource%>/luci.js"></script>
+									<script>
+										L = new LuCI(<%=util.serialize_json({
+											token = token,
+											resource = resource,
+											media = media,
+											documentroot = http.getenv("DOCUMENT_ROOT"),
+											pollinterval = main.pollinterval or 5,
+											sessionid = disp.context.authsession,
+											rpcbase = url("admin/ubus"),
+											scriptname = http.getenv("SCRIPT_NAME"),
+											ubuspath = "/ubus/",
+											requestpath = requestpath,
+											dispatchpath = dispatchpath,
+											apply_rollback = apply.rollback or 90,
+											apply_holdoff = apply.holdoff or 4,
+											apply_timeout = apply.timeout or 5,
+											apply_display = apply.display or 1.5,
+											nodespec = node,
+											firstchild = dispatchpath[1]
+										})%>);
+									</script>
+									<script src="<%=url('admin/translations', luci.i18n.context.lang)%>"></script>
+									<script src="<%=resource%>/cbi.js"></script>
 									<title>
 										<%=striptags( (boardinfo.hostname or "?" ) .. ( (node and node.title) and ' - '
 											.. translate(node.title) or '' )) %> - LuCI

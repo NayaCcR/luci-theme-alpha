@@ -3,11 +3,27 @@
 "require ui";
 return baseclass.extend({
   __init__: function () {
-    ui.menu.load().then(L.bind(this.render, this));
+    ui.menu.load().then(
+      L.bind(this.render, this),
+      L.bind(this.handleMenuLoadError, this)
+    );
+  },
+  hideLoading: function () {
+    var loading = document.querySelector(".main > .loading");
+    if (loading) {
+      loading.style.opacity = "0";
+      loading.style.visibility = "hidden";
+    }
+  },
+  handleMenuLoadError: function (error) {
+    this.hideLoading();
+    if (window.console && console.error)
+      console.error("Unable to load LuCI menu", error);
   },
   render: function (tree) {
     var node = tree,
       url = "";
+    this.hideLoading();
     this.renderModeMenu(node);
     if (L.env.dispatchpath.length >= 3) {
       for (var i = 0; i < 3 && node; i++) {
@@ -28,8 +44,6 @@ return baseclass.extend({
         "click",
         ui.createHandlerFn(this, "handleSidebarToggle")
       );
-    document.querySelector(".main > .loading").style.opacity = "0";
-    document.querySelector(".main > .loading").style.visibility = "hidden";
     if (window.innerWidth <= 1152) {
       document.querySelector(".main-left").style.transform = "translateX(-20rem)";
     }

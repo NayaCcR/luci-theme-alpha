@@ -1,4 +1,4 @@
-name: Build universal luci-theme-alpha IPK
+name: Build luci-theme-alpha IPK (OpenWrt <= 23.xx)
 
 on:
   workflow_dispatch:
@@ -9,7 +9,7 @@ on:
 
 jobs:
   build:
-    name: Build architecture-independent IPK
+    name: Build IPK natively via GitHub Actions
     runs-on: ubuntu-latest
 
     steps:
@@ -45,24 +45,8 @@ jobs:
           make defconfig
           make package/luci-theme-alpha/compile V=s
 
-      - name: Collect universal IPK
-        run: |
-          mkdir -p dist
-          IPK="$(find openwrt-sdk/bin/packages -type f -name 'luci-theme-alpha*_all.ipk' -print -quit)"
-          if [ -z "$IPK" ]; then
-            echo "Expected an architecture-independent luci-theme-alpha *_all.ipk package"
-            find openwrt-sdk/bin/packages -type f -name 'luci-theme-alpha*.ipk' -print
-            exit 1
-          fi
-          cp "$IPK" dist/
-          sha256sum dist/*.ipk > dist/SHA256SUMS
-          PACKAGE_NAME="$(basename "$IPK")"
-          echo "Universal package: $PACKAGE_NAME"
-
-      - name: Upload universal IPK
+      - name: Upload ipk
         uses: actions/upload-artifact@v4
         with:
-          name: luci-theme-alpha-universal-ipk
-          path: dist/
-          if-no-files-found: error
-          compression-level: 0
+          name: luci-theme-alpha-ipk
+          path: openwrt-sdk/bin/packages/**/*/luci-theme-alpha*.ipk
