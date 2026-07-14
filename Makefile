@@ -11,7 +11,7 @@ THEME_TITLE:=Alpha
 
 PKG_NAME:=luci-theme-$(THEME_NAME)
 PKG_VERSION:=3.9.7_beta2
-PKG_RELEASE:=11
+PKG_RELEASE:=12
 
 include $(INCLUDE_DIR)/package.mk
 
@@ -35,20 +35,20 @@ define Package/luci-theme-$(THEME_NAME)/install
 	$(INSTALL_DIR) $(1)/etc/uci-defaults
 	echo "uci set luci.themes.$(THEME_TITLE)=/luci-static/$(THEME_NAME); uci commit luci" > $(1)/etc/uci-defaults/30-luci-theme-$(THEME_NAME)
 	$(INSTALL_DIR) $(1)/www/luci-static/$(THEME_NAME)
-	$(CP) -a ./luasrc/* $(1)/www/luci-static/$(THEME_NAME)/ 2>/dev/null || true
+	$(CP) ./luasrc/. $(1)/www/luci-static/$(THEME_NAME)/
 	
-	# Install HTML templates for OpenWrt 23.xx and older (Lua)
+	# Install templates for Lua based LuCI, including LEDE r24.10
 	$(INSTALL_DIR) $(1)/usr/lib/lua/luci/view/themes/$(THEME_NAME)
-	$(CP) -a ./template/*.htm $(1)/usr/lib/lua/luci/view/themes/$(THEME_NAME)/ 2>/dev/null || true
+	$(CP) ./template/*.htm $(1)/usr/lib/lua/luci/view/themes/$(THEME_NAME)/
 	
-	# Install Ucode templates for OpenWrt 24.xx / 25.xx and newer (ucode)
+	# Install templates for ucode based LuCI
 	$(INSTALL_DIR) $(1)/usr/share/ucode/luci/template/themes/$(THEME_NAME)
-	$(CP) -a ./template/*.ut $(1)/usr/share/ucode/luci/template/themes/$(THEME_NAME)/ 2>/dev/null || true
+	$(CP) ./template/*.ut $(1)/usr/share/ucode/luci/template/themes/$(THEME_NAME)/
 	
 	$(INSTALL_DIR) $(1)/www/luci-static/resources
-	$(CP) -a ./js/* $(1)/www/luci-static/resources/ 2>/dev/null || true
+	$(CP) ./js/. $(1)/www/luci-static/resources/
 	$(INSTALL_DIR) $(1)/etc/config
-	$(CP) -a ./root/etc/config/* $(1)/etc/config/ 2>/dev/null || true
+	$(CP) ./root/etc/config/. $(1)/etc/config/
 endef
 
 define Package/luci-theme-$(THEME_NAME)/postinst

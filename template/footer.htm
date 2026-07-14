@@ -96,22 +96,9 @@
 										<img src="<%=media%>/gaya/icon/arrow.svg">
 									</label>
 						</div>
-						<script>
-							{
-								const nav = document.querySelector(".navbar");
-								let lastScrollY = window.scrollY;
-								window.addEventListener("scroll", () => {
-									if (lastScrollY < window.scrollY) {
-										nav.classList.add("navbar--hidden");
-									} else {
-										nav.classList.remove("navbar--hidden");
-									}
-									lastScrollY = window.scrollY;
-								});
-							}
-						</script>
 						</div>
-						<script type="text/javascript">L.require('menu-alpha')</script>
+						</div>
+						<script src="<%=resource%>/menu-alpha.js"></script>
 						<script src="<%=media%>/app.js"></script>
 						</body>
 

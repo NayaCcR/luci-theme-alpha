@@ -1,226 +1,97 @@
-"use strict";
-"require baseclass";
-"require ui";
-return baseclass.extend({
-  __init__: function () {
-    ui.menu.load().then(
-      L.bind(this.render, this),
-      L.bind(this.handleMenuLoadError, this)
-    );
-  },
-  hideLoading: function () {
+(function () {
+  "use strict";
+
+  function onReady(callback) {
+    if (document.readyState === "loading")
+      document.addEventListener("DOMContentLoaded", callback);
+    else
+      callback();
+  }
+
+  onReady(function () {
     var loading = document.querySelector(".main > .loading");
-    if (loading) {
-      loading.style.opacity = "0";
-      loading.style.visibility = "hidden";
-    }
-  },
-  handleMenuLoadError: function (error) {
-    this.hideLoading();
-    if (window.console && console.error)
-      console.error("Unable to load LuCI menu", error);
-  },
-  render: function (tree) {
-    var node = tree,
-      url = "";
-    this.hideLoading();
-    this.renderModeMenu(node);
-    if (L.env.dispatchpath.length >= 3) {
-      for (var i = 0; i < 3 && node; i++) {
-        node = node.children[L.env.dispatchpath[i]];
-        url = url + (url ? "/" : "") + L.env.dispatchpath[i];
-      }
-      if (node) this.renderTabMenu(node, url);
-    }
-    document
-      .querySelector(".showSide")
-      .addEventListener(
-        "click",
-        ui.createHandlerFn(this, "handleSidebarToggle")
-      );
-    document
-      .querySelector(".darkMask")
-      .addEventListener(
-        "click",
-        ui.createHandlerFn(this, "handleSidebarToggle")
-      );
-    if (window.innerWidth <= 1152) {
-      document.querySelector(".main-left").style.transform = "translateX(-20rem)";
-    }
-    window.addEventListener("resize", this.handleSidebarToggle, true);
-  },
-  handleMenuExpand: function (ev) {
-    var a = ev.target,
-      ul1 = a.parentNode,
-      ul2 = a.nextElementSibling,
-      isActive = ul1.classList.contains("active");
-    document.querySelectorAll("li.slide.active").forEach(function (li) {
-      if (li !== a.parentNode || li == ul1) {
-        var menu = li.querySelector("ul");
-        if (menu) {
-          if (!menu.style.maxHeight || menu.style.maxHeight === "1200px") {
-            menu.style.maxHeight = menu.scrollHeight + "px";
-          }
-          void menu.offsetHeight; // Force layout
-          menu.style.maxHeight = "0px";
+    var sidebar = document.querySelector(".main-left");
+    var content = document.querySelector(".main-right");
+    var mask = document.querySelector(".darkMask");
+    var toggle = document.querySelector(".showSide");
+    var mobile = window.innerWidth <= 1152;
+    var sidebarOpen = !mobile;
+
+    if (loading)
+      loading.style.display = "none";
+
+    if (!sidebar)
+      return;
+
+    function setSidebar(open) {
+      mobile = window.innerWidth <= 1152;
+      sidebarOpen = mobile ? open : true;
+
+      if (mobile) {
+        sidebar.style.transform = sidebarOpen ? "translateX(0)" : "translateX(-20rem)";
+        sidebar.style.visibility = sidebarOpen ? "visible" : "hidden";
+        if (mask) {
+          mask.style.visibility = sidebarOpen ? "visible" : "hidden";
+          mask.style.opacity = sidebarOpen ? "1" : "0";
         }
-        li.classList.remove("active");
-        li.childNodes[0].classList.remove("active");
+        if (content)
+          content.style.width = "";
+      } else {
+        sidebar.style.transform = "";
+        sidebar.style.visibility = "visible";
+        if (mask) {
+          mask.style.visibility = "";
+          mask.style.opacity = "";
+        }
+        if (content)
+          content.style.width = "";
       }
-      if (li == ul1) return;
+    }
+
+    function closeExpandedMenus(except) {
+      var expanded = document.querySelectorAll("#mainmenu li.slide.active");
+      for (var i = 0; i < expanded.length; i++) {
+        if (expanded[i] !== except) {
+          expanded[i].classList.remove("active");
+          var link = expanded[i].querySelector("a.menu");
+          if (link)
+            link.classList.remove("active");
+        }
+      }
+    }
+
+    var menuLinks = document.querySelectorAll("#mainmenu a.menu");
+    for (var i = 0; i < menuLinks.length; i++) {
+      menuLinks[i].addEventListener("click", function (event) {
+        var item = this.parentNode;
+        var open = item.classList.contains("active");
+        event.preventDefault();
+
+        closeExpandedMenus(item);
+        item.classList.toggle("active", !open);
+        this.classList.toggle("active", !open);
+      });
+    }
+
+    if (toggle) {
+      toggle.addEventListener("click", function (event) {
+        event.preventDefault();
+        if (window.innerWidth <= 1152)
+          setSidebar(!sidebarOpen);
+      });
+    }
+
+    if (mask) {
+      mask.addEventListener("click", function () {
+        if (window.innerWidth <= 1152)
+          setSidebar(false);
+      });
+    }
+
+    window.addEventListener("resize", function () {
+      setSidebar(window.innerWidth > 1152);
     });
-    if (!ul2) return;
-    if (!isActive) {
-      if (
-        ul2.parentNode.offsetLeft + ul2.offsetWidth <=
-        ul1.offsetLeft + ul1.offsetWidth
-      )
-        ul2.classList.add("align-left");
-      ul1.classList.add("active");
-      a.classList.add("active");
-      ul2.style.maxHeight = ul2.scrollHeight + "px";
-    }
-    a.blur();
-    ev.preventDefault();
-    ev.stopPropagation();
-  },
-  renderMainMenu: function (tree, url, level) {
-    var l = (level || 0) + 1,
-      ul = E("ul", { class: level ? "slide-menu" : "nav" }),
-      children = ui.menu.getChildren(tree);
-    if (children.length == 0 || l > 2) return E([]);
-    for (var i = 0; i < children.length; i++) {
-      var isActive = L.env.dispatchpath[l] == children[i].name,
-        submenu = this.renderMainMenu(
-          children[i],
-          url + "/" + children[i].name,
-          l
-        ),
-        hasChildren = submenu.children.length,
-        dataTitle = hasChildren ? children[i].title : _(children[i].title);
-      ul.appendChild(
-        E(
-          "li",
-          {
-            class: hasChildren
-              ? "slide" + (isActive ? " active" : "")
-              : isActive
-              ? " active"
-              : "",
-          },
-          [
-            E(
-              "a",
-              {
-                href: hasChildren ? "#" : L.url(url, children[i].name),
-                class: hasChildren
-                  ? "menu" + (isActive ? " active" : "")
-                  : null,
-                click: hasChildren
-                  ? ui.createHandlerFn(this, "handleMenuExpand")
-                  : null,
-                "data-title": dataTitle,
-                "data-name": children[i].name,
-              },
-              [_(children[i].title)]
-            ),
-            submenu,
-          ]
-        )
-      );
-    }
-    if (l == 1) {
-      var container = document.querySelector("#mainmenu");
-      container.appendChild(ul);
-      container.style.display = "";
-    }
-    return ul;
-  },
-  renderModeMenu: function (tree) {
-    var ul = document.querySelector("#modemenu"),
-      children = ui.menu.getChildren(tree);
-    for (var i = 0; i < children.length; i++) {
-      var isActive = L.env.requestpath.length
-        ? children[i].name == L.env.requestpath[0]
-        : i == 0;
-      ul.appendChild(
-        E("li", {}, [
-          E(
-            "a",
-            {
-              href: L.url(children[i].name),
-              class: isActive ? "active" : null,
-            },
-            [_(children[i].title)]
-          ),
-        ])
-      );
-      if (isActive) this.renderMainMenu(children[i], children[i].name);
-      if (i > 0 && i < children.length)
-        ul.appendChild(E("li", { class: "divider" }, [E("span")]));
-    }
-    if (children.length > 1) ul.parentElement.style.display = "";
-  },
-  renderTabMenu: function (tree, url, level) {
-    var container = document.querySelector("#tabmenu"),
-      l = (level || 0) + 1,
-      ul = E("ul", { class: "tabs" }),
-      children = ui.menu.getChildren(tree),
-      activeNode = null;
-    if (children.length == 0) return E([]);
-    for (var i = 0; i < children.length; i++) {
-      var isActive = L.env.dispatchpath[l + 2] == children[i].name,
-        activeClass = isActive ? " active" : "",
-        className = "tabmenu-item-%s %s".format(children[i].name, activeClass);
-      ul.appendChild(
-        E("li", { class: className }, [
-          E("a", { href: L.url(url, children[i].name) }, [
-            _(children[i].title),
-          ]),
-        ])
-      );
-      if (isActive) activeNode = children[i];
-    }
-    container.appendChild(ul);
-    container.style.display = "";
-    if (activeNode)
-      container.appendChild(
-        this.renderTabMenu(activeNode, url + "/" + activeNode.name, l)
-      );
-    return ul;
-  },
-  handleSidebarToggle: function (ev) {
-    var width = window.innerWidth,
-      darkMask = document.querySelector(".darkMask"),
-      mainRight = document.querySelector(".main-right"),
-      mainLeft = document.querySelector(".main-left"),
-      open = mainLeft.style.transform === "";
 
-    if (ev.type == "resize") {
-      open = true;
-    }
-
-    var willOpen = !open;
-    if (ev.type == "resize") {
-      willOpen = width > 1152;
-    }
-
-    if (width <= 1152) {
-      mainLeft.style.width = "";
-      mainLeft.style.transform = willOpen ? "" : "translateX(-20rem)";
-      mainLeft.style.visibility = willOpen ? "visible" : "";
-      darkMask.style.visibility = willOpen ? "visible" : "";
-      darkMask.style.opacity = willOpen ? 1 : "";
-      mainRight.style.width = "";
-    } else {
-      mainLeft.style.width = "";
-      mainLeft.style.transform = willOpen ? "" : "translateX(-20rem)";
-      mainLeft.style.visibility = willOpen ? "visible" : "hidden";
-      mainRight.style.width = willOpen ? "" : "100%";
-      darkMask.style.visibility = "";
-      darkMask.style.opacity = "";
-    }
-    if (ev && ev.preventDefault) ev.preventDefault();
-    if (ev && ev.stopPropagation) ev.stopPropagation();
-  },
-});
+    setSidebar(!mobile);
+  });
+})();

@@ -21,17 +21,129 @@
 						local util = require "luci.util"
 						local http = require "luci.http"
 						local disp = require "luci.dispatcher"
-						local ver = require "luci.version"
-						local config = require "luci.config"
 						local boardinfo = util.ubus("system", "board") or {}
+						local request = disp.context.path or {}
+						local request2 = disp.context.request or request
+						local category = request[1]
+						local cattree = category and disp.node(category)
+						local leaf = request2[#request2]
+						local tree = disp.node()
 						local node = disp.context.dispatched
-						local dispatchpath = disp.context.path or {}
-						local requestpath = disp.context.requestpath or dispatchpath
-						local path = table.concat(dispatchpath, "-")
-						local apply = config.apply or {}
-						local main = config.main or {}
+						local categories = disp.node_childs(tree)
+						local path = table.concat(request, "-")
+						local current = tree
+
+						for _, name in ipairs(request) do
+							if current.nodes and current.nodes[name] then
+								current = current.nodes[name]
+								current._menu_selected = true
+							end
+						end
 
 						http.prepare_content("text/html; charset=UTF-8")
+
+						local function nodeurl(prefix, name, query)
+							local target = url(prefix, name)
+							if query then
+								target = target .. http.build_querystring(query)
+							end
+							return pcdata(target)
+						end
+
+						local function nodetitle(menu_node, fallback)
+							return pcdata(striptags(translate(menu_node.title or fallback or "")))
+						end
+
+						local function render_tabmenu(prefix, menu_node, level)
+							level = level or 1
+							local children = disp.node_childs(menu_node)
+							if #children == 0 then
+								return
+							end
+
+							if level > 2 then
+								write('<ul class="tabs">')
+							end
+
+							local selected_node
+							local selected_name
+							for _, name in ipairs(children) do
+								local child = menu_node.nodes[name]
+								local selected = child._menu_selected or (menu_node.leaf and name == leaf)
+								if child._menu_selected then
+									selected_node = child
+									selected_name = name
+								end
+
+								if level > 2 then
+									write(string.format(
+										'<li class="tabmenu-item-%s%s"><a href="%s">%s</a></li>',
+										pcdata(name), selected and ' active' or '',
+										nodeurl(prefix, name, child.query), nodetitle(child, name)
+									))
+								end
+							end
+
+							if level > 2 then
+								write('</ul>')
+							end
+
+							if selected_node then
+								render_tabmenu(prefix .. "/" .. selected_name, selected_node, level + 1)
+							end
+						end
+
+						local function render_submenu(prefix, menu_node)
+							local children = disp.node_childs(menu_node)
+							if #children == 0 then
+								return
+							end
+
+							write('<ul class="slide-menu">')
+							for _, name in ipairs(children) do
+								local child = menu_node.nodes[name]
+								local title = nodetitle(child, name)
+								local selected = child._menu_selected or (menu_node.leaf and name == leaf)
+								write(string.format(
+									'<li%s><a data-title="%s" data-name="%s" href="%s">%s</a></li>',
+									selected and ' class="active"' or '', title, pcdata(name),
+									nodeurl(prefix, name, child.query), title
+								))
+							end
+							write('</ul>')
+						end
+
+						local function render_topmenu()
+							if not cattree then
+								return
+							end
+
+							local children = disp.node_childs(cattree)
+							write('<ul class="nav">')
+							for _, name in ipairs(children) do
+								local child = cattree.nodes[name]
+								local title = nodetitle(child, name)
+								local selected = child._menu_selected
+								local grandchildren = disp.node_childs(child)
+
+								if #grandchildren > 0 then
+									write(string.format(
+										'<li class="slide%s"><a class="menu%s" data-title="%s" data-name="%s" href="#">%s</a>',
+										selected and ' active' or '', selected and ' active' or '',
+										title, pcdata(name), title
+									))
+									render_submenu(category .. "/" .. name, child)
+									write('</li>')
+								else
+									write(string.format(
+										'<li%s><a data-title="%s" data-name="%s" href="%s">%s</a></li>',
+										selected and ' class="active"' or '', title, pcdata(name),
+										nodeurl(category, name, child.query), title
+									))
+								end
+							end
+							write('</ul>')
+						end
 					-%>
 						<!DOCTYPE html>
 						<html lang="<%=luci.i18n.context.lang%>">
@@ -55,31 +167,7 @@
 							<% if node and node.css then %>
 								<link rel="stylesheet" href="<%=resource%>/<%=node.css%>">
 								<% end -%>
-									<script src="<%=resource%>/promis.min.js"></script>
-									<script src="<%=resource%>/luci.js"></script>
-									<script>
-										L = new LuCI(<%=util.serialize_json({
-											token = token,
-											resource = resource,
-											media = media,
-											documentroot = http.getenv("DOCUMENT_ROOT"),
-											pollinterval = main.pollinterval or 5,
-											sessionid = disp.context.authsession,
-											rpcbase = url("admin/ubus"),
-											scriptname = http.getenv("SCRIPT_NAME"),
-											ubuspath = "/ubus/",
-											requestpath = requestpath,
-											dispatchpath = dispatchpath,
-											apply_rollback = apply.rollback or 90,
-											apply_holdoff = apply.holdoff or 4,
-											apply_timeout = apply.timeout or 5,
-											apply_display = apply.display or 1.5,
-											nodespec = node,
-											firstchild = dispatchpath[1]
-										})%>);
-									</script>
-									<script src="<%=url('admin/translations', luci.i18n.context.lang)%>"></script>
-									<script src="<%=resource%>/cbi.js"></script>
+									<script src="<%=resource%>/xhr.js"></script>
 									<title>
 										<%=striptags( (boardinfo.hostname or "?" ) .. ( (node and node.title) and ' - '
 											.. translate(node.title) or '' )) %> - LuCI
@@ -113,21 +201,31 @@
 								</div>
 							</header>
 							<div class="main">
-								<div style="" class="loading"><span>
+								<div class="loading" style="display:none" aria-hidden="true"><span>
 										<div class="loading-img"></div>
 									</span></div>
-								<div class="main-left" id="mainmenu" style="display:none"></div>
+								<div class="main-left" id="mainmenu">
+									<% render_topmenu() %>
+								</div>
 								<div class="main-right">
-									<div class="modemenu-buttons" style="display:none">
-										<ul id="modemenu"></ul>
+									<div class="modemenu-buttons"<% if #categories <= 1 then %> style="display:none"<% end %>>
+										<ul id="modemenu">
+											<% for _, name in ipairs(categories) do local menu_node = tree.nodes[name] %>
+												<li><a href="<%=pcdata(controller .. '/' .. name .. '/')%>"<% if category == name then %> class="active"<% end %>><%=nodetitle(menu_node, name)%></a></li>
+											<% end %>
+										</ul>
 									</div>
 									<div class="darkMask"></div>
 									<div id="maincontent">
 										<div class="container">
-											<%- if luci.sys.process.info("uid")==0 and luci.sys.user.getuser("root") and
-												not luci.sys.user.getpasswd("root") and path
-												~="admin-system-admin-password" then -%>
-												<%- end -%>
+											<%- if sys.process.info("uid") == 0 and sys.user.getuser("root") and
+												not sys.user.getpasswd("root") and path ~= "admin-system-admin-password" then -%>
+												<div class="alert-message warning">
+													<h4><%:No password set!%></h4>
+													<p><%:There is no password set on this router. Please configure a root password to protect the web interface.%></p>
+													<a class="btn" href="<%=pcdata(url('admin/system/admin'))%>"><%:Go to password configuration...%></a>
+												</div>
+											<%- end -%>
 
 													<noscript>
 														<div class="alert-message warning">
@@ -140,4 +238,4 @@
 															</p>
 														</div>
 													</noscript>
-													<div id="tabmenu" style="display:none"></div>
+															<div id="tabmenu"><% if category and cattree then render_tabmenu(category, cattree) end %></div>
