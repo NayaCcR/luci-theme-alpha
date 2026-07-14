@@ -15,19 +15,32 @@
 
 					Licensed to the public under the Apache License 2.0
 					-%>
-					<% local ver=require "luci.version" local uci=require "luci.model.uci" .cursor() local
-						config=uci:get_all("alpha", "theme" ) -- Table to store navbar icons local icon={} -- Iterate
-						through all navbar entries uci:foreach("alpha", "navbar" , function(section) local
-						address=section.address local icon_url=section.icon if address and icon_url then --
-						Remove '/www/luci-static/alpha/' from icon_url
-						icon_url=string.gsub(icon_url, "^/www/luci%-static/alpha/" , "" ) icon[address]=icon_url end
-						end) -- Check navbar enable status local navbar_enabled=config.navbar=="1" -- Calculate number
-						of enabled navbar links local num_links=0 uci:foreach("alpha", "navbar" , function(section) if
-						section.enable=="Enable" then num_links=num_links + 1 end end) -- Calculate link width for
-						responsive design local link_width=string.format("calc(100%% / %d)", num_links > 0 and num_links or 1) -- Retrieve
-						theme properties local background_color=config.color or '#2222359a' local
-						blur_value=tonumber(config.blur) or 20 local link_blur=string.format("blur(%dpx)", blur_value)
-						%>
+					<%
+						local ver = require "luci.version"
+						local uci = require("luci.model.uci").cursor()
+						local config = uci:get_all("alpha", "theme") or {}
+						local navbar = {}
+
+						-- Collect UCI data before rendering. LuCI template output yields, which is
+						-- not permitted from inside uci:foreach() on Lua 5.1 based LEDE.
+						uci:foreach("alpha", "navbar", function(section)
+							if section.enable == "Enable" and section.address then
+								local icon_url = section.icon or "default/icon.png"
+								icon_url = string.gsub(icon_url, "^/www/luci%-static/alpha/", "")
+								navbar[#navbar + 1] = {
+									address = section.address,
+									icon = icon_url,
+									newtab = section.newtab == "Yes"
+								}
+							end
+						end)
+
+						local navbar_enabled = config.navbar == "1"
+						local link_width = string.format("calc(100%% / %d)", #navbar > 0 and #navbar or 1)
+						local background_color = config.color or "#2222359a"
+						local blur_value = tonumber(config.blur) or 20
+						local link_blur = string.format("blur(%dpx)", blur_value)
+					%>
 
 						<style>
 							.main>.main-left,
@@ -72,14 +85,11 @@
 						<div class="navbar active">
 							<% if navbar_enabled then %>
 								<div class="dropdown">
-									<% uci:foreach("alpha", "navbar" , function(section) local address=section.address
-										local icon_url=icon[address] or 'default/icon.png' local
-										target_blank=section.newtab=="Yes" and 'target="_blank"' or '' if
-										section.enable=="Enable" then %>
-										<a href="<%=address%>" <%=target_blank%>>
-											<img src="<%=media%>/<%=icon_url%>" />
+									<% for _, item in ipairs(navbar) do %>
+										<a href="<%=pcdata(item.address)%>"<% if item.newtab then %> target="_blank" rel="noopener noreferrer"<% end %>>
+											<img src="<%=media%>/<%=pcdata(item.icon)%>" alt="" />
 										</a>
-										<% end end) %>
+									<% end %>
 								</div>
 								<% end %>
 									<label class="toggler">
